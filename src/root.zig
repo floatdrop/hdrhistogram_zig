@@ -102,8 +102,8 @@ pub fn HdrHistogram(
 
         /// Returns lowest equivalent value for index in counts array
         fn valueForIndex(self: *const Self, index: u64) u64 {
-            var bucket_index = index >> @as(u6, @intCast(self.sub_bucket_half_count_magnitude)) - 1;
-            var sub_bucket_index = index & (self.sub_bucket_half_count - 1) + self.sub_bucket_half_count;
+            var bucket_index = (index >> @as(u6, @intCast(self.sub_bucket_half_count_magnitude))) - 1;
+            var sub_bucket_index = (index & (self.sub_bucket_half_count - 1)) + self.sub_bucket_half_count;
 
             if (bucket_index < 0) {
                 sub_bucket_index -= self.sub_bucket_half_count;
@@ -130,20 +130,11 @@ pub fn HdrHistogram(
             return (bucket_index + 1) << @as(u6, @intCast(self.sub_bucket_half_count_magnitude));
         }
 
-        // return the lowest (and therefore highest precision) bucket index that can represent the value
-        // Calculates the number of powers of two by which the value is greater than the biggest value that fits in
-        // bucket 0. This is the bucket index since each successive bucket can hold a value 2x greater.
         fn getBucketIndexFor(self: *const Self, value: u64) u64 {
             const pow2_ceiling = 64 - @clz(value | self.sub_bucket_mask);
             return pow2_ceiling - self.unit_magnitude - (self.sub_bucket_half_count_magnitude + 1);
         }
 
-        // For bucketIndex 0, this is just value, so it may be anywhere in 0 to subBucketCount.
-        // For other bucketIndex, this will always end up in the top half of subBucketCount: assume that for some bucket
-        // k > 0, this calculation will yield a value in the bottom half of 0 to subBucketCount. Then, because of how
-        // buckets overlap, it would have also been in the top half of bucket k-1, and therefore would have
-        // returned k-1 in getBucketIndex(). Since we would then shift it one fewer bits here, it would be twice as big,
-        // and therefore in the top half of subBucketCount.
         fn getSubBucketIndexFor(self: *const Self, value: u64, bucket_index: u64) u64 {
             return value >> @as(u6, @intCast(bucket_index + self.unit_magnitude));
         }
@@ -244,7 +235,7 @@ pub fn HdrHistogram(
             var count_at_percentile: i64 = @as(i64, @intFromFloat((p / 100.0) * @as(f64, @floatFromInt(self.total_count)) + 0.5));
             var value_at_count: u64 = 0;
             for (0..self.counts.len) |i| {
-                if (self.counts[0] != 0) {
+                if (self.counts[i] != 0) {
                     count_at_percentile -= @as(i64, @intCast(self.counts[i])); // TODO: This is ugly
 
                     if (count_at_percentile <= 0) {
@@ -283,7 +274,7 @@ pub fn HdrHistogram(
                 }
 
                 const leq = iter.histogram.valueFromIndex(iter.bucket_index, iter.sub_bucket_index);
-                const heq = leq + iter.histogram.sizeOfEquivalentValueRange(iter.bucket_index, iter.sub_bucket_index);
+                const heq = leq + iter.histogram.sizeOfEquivalentValueRange(iter.bucket_index, iter.sub_bucket_index) - 1;
 
                 return Bucket{
                     .count = iter.histogram.counts[iter.histogram.countsIndex(iter.bucket_index, iter.sub_bucket_index)],
@@ -354,4 +345,42 @@ test "value at percentile" {
     try expectEqual(990207, h.valueAtPercentile(99.0));
     try expectEqual(999423, h.valueAtPercentile(99.9));
     try expectEqual(999935, h.valueAtPercentile(99.99));
+}
+
+const expectApproxEqRel = std.testing.expectApproxEqRel;
+
+test "mean" {
+    var h: HdrHistogram(LOWEST, HIGHEST, SIGNIFICANT) = .init();
+    for (0..1000000) |i| {
+        h.record(i);
+    }
+    try expectApproxEqRel(500000, h.mean(), 0.01);
+}
+
+test "stdDev" {
+    var h: HdrHistogram(LOWEST, HIGHEST, SIGNIFICANT) = .init();
+    var total: f64 = 0.0;
+    for (0..1000000) |i| {
+        total += std.math.pow(f64, @as(f64, @floatFromInt(i)) - 500000.0, 2);
+        h.record(i);
+    }
+    const variance = total / 999999.0;
+    const stdDev = std.math.sqrt(variance);
+    try expectApproxEqRel(stdDev, h.stdDev(), 0.01);
+}
+
+test "max" {
+    var h: HdrHistogram(LOWEST, HIGHEST, SIGNIFICANT) = .init();
+    for (0..1000000) |i| {
+        h.record(i);
+    }
+    try expectEqual(1000447, h.max());
+}
+
+test "min" {
+    var h: HdrHistogram(LOWEST, HIGHEST, SIGNIFICANT) = .init();
+    for (0..1000000) |i| {
+        h.record(i);
+    }
+    try expectEqual(0, h.min());
 }
