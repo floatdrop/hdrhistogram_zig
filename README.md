@@ -13,7 +13,7 @@ This implementation provides static struct type, which size is computed in
 `comptime`.
 
 ```zig
-const HdrHistogram = @import("hdrhistogram_zig").HdrHistogram;
+const HdrHistogram = @import("hdrhistogram").HdrHistogram;
 
 pub fn main() void {
     var h: HdrHistogram(1, 10_000_000_000, .three_digits) = .init(); // Initalized on stack
