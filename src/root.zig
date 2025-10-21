@@ -33,8 +33,6 @@ pub fn HdrHistogram(
     /// and separation.
     comptime significant_value_digits: SignificantValueDigits,
 ) type {
-    // TODO: Require significant_value_digits to be in 1..5 range.
-
     // Given a 3 decimal point accuracy, the expectation is obviously for "+/- 1 unit at 1000". It also means that
     // it's "ok to be +/- 2 units at 2000". The "tricky" thing is that it is NOT ok to be +/- 2 units at 1999. Only
     // starting at 2000. So internally, we need to maintain single unit resolution to 2x 10^decimalPoints.
