@@ -235,8 +235,6 @@ pub fn HdrHistogram(
             sub_bucket_index: u64 = 0,
 
             pub fn next(iter: *Iterator) ?Bucket {
-                defer iter.sub_bucket_index += 1;
-
                 if (iter.sub_bucket_index >= iter.histogram.sub_bucket_count) {
                     iter.sub_bucket_index = iter.histogram.sub_bucket_half_count;
                     iter.bucket_index += 1;
@@ -246,6 +244,8 @@ pub fn HdrHistogram(
                 if (index >= iter.histogram.counts.len) {
                     return null;
                 }
+
+                defer iter.sub_bucket_index += 1;
 
                 const leq = iter.histogram.valueFromIndex(iter.bucket_index, iter.sub_bucket_index);
                 const heq = leq + iter.histogram.sizeOfEquivalentValueRange(iter.bucket_index, iter.sub_bucket_index) - 1;
