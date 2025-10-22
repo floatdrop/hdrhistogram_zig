@@ -201,13 +201,14 @@ pub fn HdrHistogram(
         pub fn valueAtPercentile(self: *const Self, percentile: f64) u64 {
             const p = math.clamp(percentile, 0.0, 100.0);
 
-            var count_at_percentile: i64 = @as(i64, @intFromFloat((p / 100.0) * @as(f64, @floatFromInt(self.total_count)) + 0.5));
+            const count_at_percentile: u64 = self.total_count * @as(u64, @intFromFloat(p * 100000)) / (100 * 100000); // scaling p to 5 digits beyond point
+            var count_up_to_index: u64 = 0;
             var value_at_count: u64 = 0;
             for (0..self.counts.len) |i| {
                 if (self.counts[i] != 0) {
-                    count_at_percentile -= @as(i64, @intCast(self.counts[i])); // TODO: This is ugly
+                    count_up_to_index += self.counts[i];
 
-                    if (count_at_percentile <= 0) {
+                    if (count_up_to_index >= count_at_percentile) {
                         value_at_count = self.valueForIndex(i);
                         break;
                     }
