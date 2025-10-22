@@ -16,13 +16,34 @@ This implementation provides static struct type, which size is computed in
 const HdrHistogram = @import("hdrhistogram").HdrHistogram;
 
 pub fn main() void {
-    var h: HdrHistogram(1, 10_000_000_000, .three_digits) = .init(); // Initalized on stack
-    h.record(1);
-    h.record(2);
-    h.record(3);
+    std.debug.print("Size of plain array  : {d:12} bytes\n", .{@sizeOf([10_000_000_000]u64)});
+    std.debug.print("Size of HdrHistogram : {d:12} bytes\n", .{@sizeOf(HdrHistogram(1, 10_000_000_000, .three_digits))});
 
-    std.debug.print("Mean: {d}\n", .{h.mean()});
+    /// Size of plain array  : 80000000000 bytes
+    /// Size of HdrHistogram :      204856 bytes
+    ///                            390518x less space
 }
 ```
 
 Many methods are absent yet, but most common are implemented.
+
+## Statistics
+
+ - `total_count`
+ - `min`
+ - `max`
+ - `mean`
+ - `stdDev`
+ - `valueAtPercentile`
+
+## Iterating buckets
+
+To iterate over all counts with their lowers and highest equivalent values:
+
+```zig
+var iter = h.iterator();
+
+while (iter.next()) |bucket| {
+    std.debug.print("count={d} in {d}..{d} range\n", .{bucket.count, bucket.lowest_equivalent_value, bucket.highest_equivalent_value});
+}
+```

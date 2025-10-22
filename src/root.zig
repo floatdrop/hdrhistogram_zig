@@ -93,6 +93,180 @@ pub fn HdrHistogram(
             return Self{ .counts = undefined };
         }
 
+        /// Returns recorded count for value.
+        ///
+        /// Values with same lowestEquivalentValue are considered equal and contribute to same counter.
+        pub fn count(self: *const Self, value: u64) u64 {
+            return self.counts[self.countsIndexFor(value)];
+        }
+
+        /// Records one occurance for value.
+        ///
+        /// Values with same lowestEquivalentValue are considered equal and contribute to same counter.
+        pub fn record(self: *Self, value: u64) void {
+            self.recordN(value, 1);
+        }
+
+        /// Records N occurances for value.
+        ///
+        /// Values with same lowestEquivalentValue are considered equal and contribute to same counter.
+        pub fn recordN(self: *Self, value: u64, n: u64) void {
+            self.counts[self.countsIndexFor(value)] += n;
+            self.total_count += n;
+        }
+
+        /// Returns lowest bound for equivalent range for value.
+        ///
+        /// All values in equivalent range are considered equal.
+        pub fn lowestEquivalentValue(self: *const Self, value: u64) u64 {
+            const bucket_index = self.getBucketIndexFor(value);
+            const sub_bucket_index = self.getSubBucketIndexFor(value, bucket_index);
+            return self.valueFromIndex(bucket_index, sub_bucket_index);
+        }
+
+        /// Returns highest bound for equivalent range for value (bounds are inclusive).
+        ///
+        /// All values in equivalent range are considered equal.
+        pub fn highestEquivalentValue(self: *const Self, value: u64) u64 {
+            const bucket_index = self.getBucketIndexFor(value);
+            const sub_bucket_index = self.getSubBucketIndexFor(value, bucket_index);
+            return self.valueFromIndex(bucket_index, sub_bucket_index) + self.sizeOfEquivalentValueRange(bucket_index, sub_bucket_index) - 1;
+        }
+
+        /// Returns maximum of all recorded values.
+        pub fn max(self: *const Self) u64 {
+            var m: u64 = 0;
+            var i = self.iterator();
+            while (i.next()) |bucket| {
+                if (bucket.count != 0) {
+                    m = bucket.highest_equivalent_value;
+                }
+            }
+            return m;
+        }
+
+        /// Returns minimum of all recorded values.
+        pub fn min(self: *const Self) u64 {
+            var m: u64 = 0;
+            var i = self.iterator();
+            while (i.next()) |bucket| {
+                if (bucket.count != 0 and m == 0) {
+                    m = bucket.highest_equivalent_value;
+                    break;
+                }
+            }
+            return self.lowestEquivalentValue(m);
+        }
+
+        /// Returns mean of all recorded values.
+        pub fn mean(self: *const Self) f64 {
+            if (self.total_count == 0) {
+                return 0;
+            }
+
+            var total: f64 = 0.0;
+            var i = self.iterator();
+            while (i.next()) |bucket| {
+                if (bucket.count != 0) {
+                    total += @as(f64, @floatFromInt(bucket.count)) * (@as(f64, @floatFromInt(bucket.lowest_equivalent_value)) + @as(f64, @floatFromInt(bucket.highest_equivalent_value - bucket.lowest_equivalent_value)) / 2.0);
+                }
+            }
+
+            return total / @as(f64, @floatFromInt(self.total_count));
+        }
+
+        /// Returns standard deviation of all recorded values.
+        pub fn stdDev(self: *const Self) f64 {
+            if (self.total_count == 0) {
+                return 0;
+            }
+
+            const mean_ = self.mean();
+            var geometric_dev_total: f64 = 0.0;
+
+            var i = self.iterator();
+            while (i.next()) |bucket| {
+                if (bucket.count != 0) {
+                    const meq: f64 = (@as(f64, @floatFromInt(bucket.lowest_equivalent_value)) + @as(f64, @floatFromInt(bucket.highest_equivalent_value - bucket.lowest_equivalent_value)) / 2.0);
+                    const dev = meq - mean_;
+                    geometric_dev_total += (dev * dev) * @as(f64, @floatFromInt(bucket.count));
+                }
+            }
+
+            return math.sqrt(geometric_dev_total / @as(f64, @floatFromInt(self.total_count)));
+        }
+
+        /// Returns percentile value.
+        ///
+        /// That is value, which is greater than percentile% of recorded values.
+        pub fn valueAtPercentile(self: *const Self, percentile: f64) u64 {
+            const p = math.clamp(percentile, 0.0, 100.0);
+
+            var count_at_percentile: i64 = @as(i64, @intFromFloat((p / 100.0) * @as(f64, @floatFromInt(self.total_count)) + 0.5));
+            var value_at_count: u64 = 0;
+            for (0..self.counts.len) |i| {
+                if (self.counts[i] != 0) {
+                    count_at_percentile -= @as(i64, @intCast(self.counts[i])); // TODO: This is ugly
+
+                    if (count_at_percentile <= 0) {
+                        value_at_count = self.valueForIndex(i);
+                        break;
+                    }
+                }
+            }
+
+            if (p == 0.0) {
+                return self.lowestEquivalentValue(value_at_count);
+            }
+            return self.highestEquivalentValue(value_at_count);
+        }
+
+        /// Returns iterator over all buckets (including empty ones).
+        ///
+        /// Iterator must outlive histogram struct.
+        pub fn iterator(self: *const Self) Iterator {
+            return .{ .histogram = self };
+        }
+
+        pub const Iterator = struct {
+            histogram: *const Self,
+
+            bucket_index: u64 = 0,
+            sub_bucket_index: u64 = 0,
+
+            pub fn next(iter: *Iterator) ?Bucket {
+                defer iter.sub_bucket_index += 1;
+
+                if (iter.sub_bucket_index >= iter.histogram.sub_bucket_count) {
+                    iter.sub_bucket_index = iter.histogram.sub_bucket_half_count;
+                    iter.bucket_index += 1;
+                }
+
+                if (iter.histogram.countsIndex(iter.bucket_index, iter.sub_bucket_index) >= iter.histogram.counts.len) {
+                    return null;
+                }
+
+                const leq = iter.histogram.valueFromIndex(iter.bucket_index, iter.sub_bucket_index);
+                const heq = leq + iter.histogram.sizeOfEquivalentValueRange(iter.bucket_index, iter.sub_bucket_index) - 1;
+
+                return Bucket{
+                    .count = iter.histogram.counts[iter.histogram.countsIndex(iter.bucket_index, iter.sub_bucket_index)],
+                    .lowest_equivalent_value = leq,
+                    .highest_equivalent_value = heq,
+                };
+            }
+
+            const Bucket = struct {
+                count: u64,
+                lowest_equivalent_value: u64,
+                highest_equivalent_value: u64,
+            };
+        };
+
+        // ┌────────────────────────────────────────────────────────────────────────────────┐
+        // │ Internal methods to work with bucket_index+sub_bucket_index and counts indexes │
+        // └────────────────────────────────────────────────────────────────────────────────┘
+
         /// Returns lowest equivalent value for (bucket_index, sub_bucket_index) pair
         fn valueFromIndex(self: *const Self, bucket_index: u64, sub_bucket_index: u64) u64 {
             return sub_bucket_index << @as(u6, @intCast(bucket_index + self.unit_magnitude));
@@ -142,151 +316,6 @@ pub fn HdrHistogram(
             const sub_bucket_index = self.getSubBucketIndexFor(value, bucket_index);
             return self.countsIndex(bucket_index, sub_bucket_index);
         }
-
-        pub fn count(self: *const Self, value: u64) u64 {
-            return self.counts[self.countsIndexFor(value)];
-        }
-
-        pub fn record(self: *Self, value: u64) void {
-            self.recordN(value, 1);
-        }
-
-        pub fn recordN(self: *Self, value: u64, n: u64) void {
-            self.counts[self.countsIndexFor(value)] += n;
-            self.total_count += n;
-        }
-
-        pub fn lowestEquivalentValue(self: *const Self, value: u64) u64 {
-            const bucket_index = self.getBucketIndexFor(value);
-            const sub_bucket_index = self.getSubBucketIndexFor(value, bucket_index);
-            return self.valueFromIndex(bucket_index, sub_bucket_index);
-        }
-
-        pub fn highestEquivalentValue(self: *const Self, value: u64) u64 {
-            const bucket_index = self.getBucketIndexFor(value);
-            const sub_bucket_index = self.getSubBucketIndexFor(value, bucket_index);
-            return self.valueFromIndex(bucket_index, sub_bucket_index) + self.sizeOfEquivalentValueRange(bucket_index, sub_bucket_index) - 1;
-        }
-
-        pub fn max(self: *const Self) u64 {
-            var m: u64 = 0;
-            var i = self.iterator();
-            while (i.next()) |bucket| {
-                if (bucket.count != 0) {
-                    m = bucket.highest_equivalent_value;
-                }
-            }
-            return m;
-        }
-
-        pub fn min(self: *const Self) u64 {
-            var m: u64 = 0;
-            var i = self.iterator();
-            while (i.next()) |bucket| {
-                if (bucket.count != 0 and m == 0) {
-                    m = bucket.highest_equivalent_value;
-                    break;
-                }
-            }
-            return self.lowestEquivalentValue(m);
-        }
-
-        pub fn mean(self: *const Self) f64 {
-            if (self.total_count == 0) {
-                return 0;
-            }
-
-            var total: f64 = 0.0;
-            var i = self.iterator();
-            while (i.next()) |bucket| {
-                if (bucket.count != 0) {
-                    total += @as(f64, @floatFromInt(bucket.count)) * (@as(f64, @floatFromInt(bucket.lowest_equivalent_value)) + @as(f64, @floatFromInt(bucket.highest_equivalent_value - bucket.lowest_equivalent_value)) / 2.0);
-                }
-            }
-
-            return total / @as(f64, @floatFromInt(self.total_count));
-        }
-
-        pub fn stdDev(self: *const Self) f64 {
-            if (self.total_count == 0) {
-                return 0;
-            }
-
-            const mean_ = self.mean();
-            var geometric_dev_total: f64 = 0.0;
-
-            var i = self.iterator();
-            while (i.next()) |bucket| {
-                if (bucket.count != 0) {
-                    const meq: f64 = (@as(f64, @floatFromInt(bucket.lowest_equivalent_value)) + @as(f64, @floatFromInt(bucket.highest_equivalent_value - bucket.lowest_equivalent_value)) / 2.0);
-                    const dev = meq - mean_;
-                    geometric_dev_total += (dev * dev) * @as(f64, @floatFromInt(bucket.count));
-                }
-            }
-
-            return math.sqrt(geometric_dev_total / @as(f64, @floatFromInt(self.total_count)));
-        }
-
-        pub fn valueAtPercentile(self: *const Self, percentile: f64) u64 {
-            const p = math.clamp(percentile, 0.0, 100.0);
-
-            var count_at_percentile: i64 = @as(i64, @intFromFloat((p / 100.0) * @as(f64, @floatFromInt(self.total_count)) + 0.5));
-            var value_at_count: u64 = 0;
-            for (0..self.counts.len) |i| {
-                if (self.counts[i] != 0) {
-                    count_at_percentile -= @as(i64, @intCast(self.counts[i])); // TODO: This is ugly
-
-                    if (count_at_percentile <= 0) {
-                        value_at_count = self.valueForIndex(i);
-                        break;
-                    }
-                }
-            }
-
-            if (p == 0.0) {
-                return self.lowestEquivalentValue(value_at_count);
-            }
-            return self.highestEquivalentValue(value_at_count);
-        }
-
-        pub fn iterator(self: *const Self) Iterator {
-            return .{ .histogram = self };
-        }
-
-        pub const Iterator = struct {
-            histogram: *const Self,
-
-            bucket_index: u64 = 0,
-            sub_bucket_index: u64 = 0,
-
-            pub fn next(iter: *Iterator) ?Bucket {
-                defer iter.sub_bucket_index += 1;
-
-                if (iter.sub_bucket_index >= iter.histogram.sub_bucket_count) {
-                    iter.sub_bucket_index = iter.histogram.sub_bucket_half_count;
-                    iter.bucket_index += 1;
-                }
-
-                if (iter.histogram.countsIndex(iter.bucket_index, iter.sub_bucket_index) >= iter.histogram.counts.len) {
-                    return null;
-                }
-
-                const leq = iter.histogram.valueFromIndex(iter.bucket_index, iter.sub_bucket_index);
-                const heq = leq + iter.histogram.sizeOfEquivalentValueRange(iter.bucket_index, iter.sub_bucket_index) - 1;
-
-                return Bucket{
-                    .count = iter.histogram.counts[iter.histogram.countsIndex(iter.bucket_index, iter.sub_bucket_index)],
-                    .lowest_equivalent_value = leq,
-                    .highest_equivalent_value = heq,
-                };
-            }
-
-            const Bucket = struct {
-                count: u64,
-                lowest_equivalent_value: u64,
-                highest_equivalent_value: u64,
-            };
-        };
     };
 }
 
