@@ -159,41 +159,40 @@ pub fn HdrHistogram(
         }
 
         /// Returns mean of all recorded values.
-        pub fn mean(self: *const Self) f64 {
+        pub fn mean(self: *const Self) u64 {
             if (self.total_count == 0) {
                 return 0;
             }
 
-            var total: f64 = 0.0;
+            var total: u64 = 0.0;
             var i = self.iterator();
             while (i.next()) |bucket| {
                 if (bucket.count != 0) {
-                    total += @as(f64, @floatFromInt(bucket.count)) * (@as(f64, @floatFromInt(bucket.lowest_equivalent_value)) + @as(f64, @floatFromInt(bucket.highest_equivalent_value - bucket.lowest_equivalent_value)) / 2.0);
+                    total += bucket.count * bucket.median_equivalent_value();
                 }
             }
 
-            return total / @as(f64, @floatFromInt(self.total_count));
+            return total / self.total_count;
         }
 
         /// Returns standard deviation of all recorded values.
-        pub fn stdDev(self: *const Self) f64 {
+        pub fn stdDev(self: *const Self) u64 {
             if (self.total_count == 0) {
                 return 0;
             }
 
-            const mean_ = self.mean();
-            var geometric_dev_total: f64 = 0.0;
+            const mean_: i64 = @intCast(self.mean());
+            var geometric_dev_total: u64 = 0.0;
 
             var i = self.iterator();
             while (i.next()) |bucket| {
                 if (bucket.count != 0) {
-                    const meq: f64 = (@as(f64, @floatFromInt(bucket.lowest_equivalent_value)) + @as(f64, @floatFromInt(bucket.highest_equivalent_value - bucket.lowest_equivalent_value)) / 2.0);
-                    const dev = meq - mean_;
-                    geometric_dev_total += (dev * dev) * @as(f64, @floatFromInt(bucket.count));
+                    const dev: i64 = @as(i64, @intCast(bucket.median_equivalent_value())) - mean_;
+                    geometric_dev_total += @as(u64, @intCast(dev * dev)) * bucket.count;
                 }
             }
 
-            return math.sqrt(geometric_dev_total / @as(f64, @floatFromInt(self.total_count)));
+            return math.sqrt(geometric_dev_total / self.total_count);
         }
 
         /// Returns percentile value.
@@ -261,6 +260,10 @@ pub fn HdrHistogram(
                 count: u64,
                 lowest_equivalent_value: u64,
                 highest_equivalent_value: u64,
+
+                pub fn median_equivalent_value(self: *const Bucket) u64 {
+                    return self.lowest_equivalent_value / 2 + self.highest_equivalent_value / 2 + 1;
+                }
             };
         };
 
@@ -375,14 +378,12 @@ test "value at percentile" {
     try expectEqual(999935, h.valueAtPercentile(99.99));
 }
 
-const expectApproxEqRel = std.testing.expectApproxEqRel;
-
 test "mean" {
     var h: HdrHistogram(LOWEST, HIGHEST, SIGNIFICANT) = .init();
     for (0..1000000) |i| {
         h.record(i);
     }
-    try expectApproxEqRel(500000, h.mean(), 0.01);
+    try expectEqual(500000, h.mean());
 }
 
 test "stdDev" {
@@ -394,7 +395,7 @@ test "stdDev" {
     }
     const variance = total / 999999.0;
     const stdDev = std.math.sqrt(variance);
-    try expectApproxEqRel(stdDev, h.stdDev(), 0.01);
+    try expectEqual(@as(u64, @intFromFloat(stdDev)), h.stdDev());
 }
 
 test "max" {
