@@ -47,3 +47,25 @@ while (iter.next()) |bucket| {
     std.debug.print("count={d} in {d}..{d} range\n", .{bucket.count, bucket.lowest_equivalent_value, bucket.highest_equivalent_value});
 }
 ```
+
+## Merging histograms
+
+If you have histograms of same type - you can just create histogram with `.counts` set to be a sum of other histograms `.counts`.
+
+```zig
+const other1: HdrHistogram(1, 10_000_000_000, .three_digits);                         // Leaves counts uninitizalized
+const other2: HdrHistogram(1, 10_000_000_000, .three_digits);
+var sum: HdrHistogram(1, 10_000_000_000, .three_digits) = .{ .counts = other1.counts + other2.counts }; // Copies counts from other histogram
+```
+
+Otherwise summing is can be implemented by iterating over buckets and recording `lowest_equivalent_value` with respective count:
+
+```zig
+const other: HdrHistogram(1, 10_000_000_000, .three_digits);     // Leaves counts uninitizalized
+var h: HdrHistogram(1, 10_000_000_000, .three_digits) = .init(); // Sets .counts to 0
+
+var iter = other.iterator();
+while (iter.next()) |bucket| {
+    h.recordN(iter.lowest_equivalent_value, iter.count);
+}
+```
