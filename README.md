@@ -58,7 +58,7 @@ const other2: HdrHistogram(1, 10_000_000_000, .three_digits);
 var sum: HdrHistogram(1, 10_000_000_000, .three_digits) = .{ .counts = other1.counts + other2.counts }; // Created counts from other histograms
 ```
 
-Otherwise summing is can be implemented by iterating over buckets and recording `lowest_equivalent_value` with respective count:
+Otherwise summing can be done by iterating over buckets and recording `lowest_equivalent_value` with respective count:
 
 ```zig
 const other: HdrHistogram(1, 10_000_000_000, .three_digits);     // Leaves counts uninitizalized
