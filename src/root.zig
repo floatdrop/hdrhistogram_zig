@@ -72,14 +72,14 @@ pub fn HdrHistogram(
     return struct {
         const Self = @This();
 
-        counts: [(buckets_needed + 1) * (sub_bucket_count / 2)]u64,
         bucket_count: u64 = buckets_needed,
         sub_bucket_count: u64 = sub_bucket_count,
         sub_bucket_half_count: u64 = (sub_bucket_count / 2),
         sub_bucket_half_count_magnitude: u64 = sub_bucket_half_count_magnitude,
-        unit_magnitude: u64 = unit_magnitude,
         sub_bucket_mask: u64 = sub_bucket_mask,
         total_count: u64 = 0,
+        unit_magnitude: u64 = unit_magnitude,
+        counts: [(buckets_needed + 1) * (sub_bucket_count / 2)]u64,
 
         /// Creates HdrHistogram with counts initizalized as 0.
         pub fn init() Self {
