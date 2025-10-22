@@ -74,7 +74,7 @@ while (iter.next()) |bucket| {
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `./c-recording/zig-out/bin/c_recording` | 45.7 ± 0.6 | 44.1 | 48.0 | 3.76 ± 0.07 |
-| `./zig-recording/zig-out/bin/zig_recording` | 12.2 ± 0.2 | 11.7 | 12.6 | 1.00 |
+| `./c-recording/zig-out/bin/c_recording` | 3.4 ± 0.2 | 3.2 | 5.4 | 2.10 ± 0.98 |
+| `./zig-recording/zig-out/bin/zig_recording` | 1.6 ± 0.7 | 1.4 | 13.8 | 1.00 |
 
 Run `make bench` from `bench` directory to start benchmarks ([hyperfine](https://github.com/sharkdp/hyperfine) is required).
