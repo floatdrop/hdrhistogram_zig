@@ -69,3 +69,12 @@ while (iter.next()) |bucket| {
     h.recordN(iter.lowest_equivalent_value, iter.count);
 }
 ```
+
+## Benchmarks
+
+| Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
+|:---|---:|---:|---:|---:|
+| `./c-recording/zig-out/bin/c_recording` | 45.7 ± 0.6 | 44.1 | 48.0 | 3.76 ± 0.07 |
+| `./zig-recording/zig-out/bin/zig_recording` | 12.2 ± 0.2 | 11.7 | 12.6 | 1.00 |
+
+Run `make bench` from `bench` directory to start benchmarks ([hyperfine](https://github.com/sharkdp/hyperfine) is required).
