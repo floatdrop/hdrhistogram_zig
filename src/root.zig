@@ -242,7 +242,8 @@ pub fn HdrHistogram(
                     iter.bucket_index += 1;
                 }
 
-                if (iter.histogram.countsIndex(iter.bucket_index, iter.sub_bucket_index) >= iter.histogram.counts.len) {
+                const index = iter.histogram.countsIndex(iter.bucket_index, iter.sub_bucket_index);
+                if (index >= iter.histogram.counts.len) {
                     return null;
                 }
 
@@ -250,7 +251,7 @@ pub fn HdrHistogram(
                 const heq = leq + iter.histogram.sizeOfEquivalentValueRange(iter.bucket_index, iter.sub_bucket_index) - 1;
 
                 return Bucket{
-                    .count = iter.histogram.counts[iter.histogram.countsIndex(iter.bucket_index, iter.sub_bucket_index)],
+                    .count = iter.histogram.counts[index],
                     .lowest_equivalent_value = leq,
                     .highest_equivalent_value = heq,
                 };
