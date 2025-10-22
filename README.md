@@ -53,9 +53,9 @@ while (iter.next()) |bucket| {
 If you have histograms of same type - you can just create histogram with `.counts` set to be a sum of other histograms `.counts`.
 
 ```zig
-const other1: HdrHistogram(1, 10_000_000_000, .three_digits);                         // Leaves counts uninitizalized
+const other1: HdrHistogram(1, 10_000_000_000, .three_digits);
 const other2: HdrHistogram(1, 10_000_000_000, .three_digits);
-var sum: HdrHistogram(1, 10_000_000_000, .three_digits) = .{ .counts = other1.counts + other2.counts }; // Copies counts from other histogram
+var sum: HdrHistogram(1, 10_000_000_000, .three_digits) = .{ .counts = other1.counts + other2.counts }; // Created counts from other histograms
 ```
 
 Otherwise summing is can be implemented by iterating over buckets and recording `lowest_equivalent_value` with respective count:
