@@ -83,11 +83,6 @@ pub fn HdrHistogram(
             return self;
         }
 
-        /// Creates HdrHistogram with counts uninitizalized.
-        pub fn initUndefined() Self {
-            return Self{ .counts = undefined };
-        }
-
         /// Returns recorded count for value.
         ///
         /// Values with same lowest_equivalent_value are considered equal and contribute to same counter.

@@ -61,7 +61,7 @@ var sum: HdrHistogram(1, 10_000_000_000, .three_digits) = .{ .counts = other1.co
 Otherwise summing can be done by iterating over buckets and recording `lowest_equivalent_value` with respective count:
 
 ```zig
-const other: HdrHistogram(1, 10_000_000_000, .three_digits);     // Leaves counts uninitizalized
+const other: HdrHistogram(1, 10_000_000_000, .three_digits) = .{};     // Leaves counts uninitizalized
 var h: HdrHistogram(1, 10_000_000_000, .three_digits) = .init(); // Sets .counts to 0
 
 var iter = other.iterator();
