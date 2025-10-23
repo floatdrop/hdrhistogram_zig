@@ -90,21 +90,21 @@ pub fn HdrHistogram(
 
         /// Returns recorded count for value.
         ///
-        /// Values with same lowestEquivalentValue are considered equal and contribute to same counter.
+        /// Values with same lowest_equivalent_value are considered equal and contribute to same counter.
         pub fn count(self: *const Self, value: u64) u64 {
             return self.counts[countsIndexFor(value)];
         }
 
         /// Records one occurance for value.
         ///
-        /// Values with same lowestEquivalentValue are considered equal and contribute to same counter.
+        /// Values with same lowest_equivalent_value are considered equal and contribute to same counter.
         pub fn record(self: *Self, value: u64) void {
             self.recordN(value, 1);
         }
 
         /// Records N occurances for value.
         ///
-        /// Values with same lowestEquivalentValue are considered equal and contribute to same counter.
+        /// Values with same lowest_equivalent_value are considered equal and contribute to same counter.
         pub fn recordN(self: *Self, value: u64, n: u64) void {
             self.counts[countsIndexFor(value)] += n;
             self.total_count += n;
@@ -193,10 +193,10 @@ pub fn HdrHistogram(
         /// Returns percentile value.
         ///
         /// That is value, which is greater than percentile% of recorded values.
-        pub fn valueAtPercentile(self: *const Self, percentile: f64) u64 {
-            const p = math.clamp(percentile, 0.0, 100.0);
+        pub fn percentile(self: *const Self, p: f64) u64 {
+            const p_ = math.clamp(p, 0.0, 100.0);
 
-            const count_at_percentile: u64 = self.total_count * @as(u64, @intFromFloat(p * 100000)) / (100 * 100000); // scaling p to 5 digits beyond point
+            const count_at_percentile: u64 = self.total_count * @as(u64, @intFromFloat(p_ * 100000)) / (100 * 100000); // scaling p to 5 digits beyond point
             var count_up_to_index: u64 = 0;
             var value_at_count: u64 = 0;
             for (0..self.counts.len) |i| {
@@ -365,13 +365,13 @@ test "value at percentile" {
         h.record(i);
     }
 
-    try expectEqual(500223, h.valueAtPercentile(50.0));
-    try expectEqual(750079, h.valueAtPercentile(75.0));
-    try expectEqual(900095, h.valueAtPercentile(90.0));
-    try expectEqual(950271, h.valueAtPercentile(95.0));
-    try expectEqual(990207, h.valueAtPercentile(99.0));
-    try expectEqual(999423, h.valueAtPercentile(99.9));
-    try expectEqual(999935, h.valueAtPercentile(99.99));
+    try expectEqual(500223, h.percentile(50.0));
+    try expectEqual(750079, h.percentile(75.0));
+    try expectEqual(900095, h.percentile(90.0));
+    try expectEqual(950271, h.percentile(95.0));
+    try expectEqual(990207, h.percentile(99.0));
+    try expectEqual(999423, h.percentile(99.9));
+    try expectEqual(999935, h.percentile(99.99));
 }
 
 test "mean" {
@@ -408,4 +408,8 @@ test "min" {
         h.record(i);
     }
     try expectEqual(0, h.min());
+}
+
+test "size" {
+    try expectEqual(204808, @sizeOf(HdrHistogram(1, 10_000_000_000, .three_digits)));
 }

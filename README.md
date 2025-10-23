@@ -20,8 +20,8 @@ pub fn main() void {
     std.debug.print("Size of HdrHistogram : {d:12} bytes\n", .{@sizeOf(HdrHistogram(1, 10_000_000_000, .three_digits))});
 
     /// Size of plain array  : 80000000000 bytes
-    /// Size of HdrHistogram :      204856 bytes
-    ///                            390518x less space
+    /// Size of HdrHistogram :      204808 bytes
+    ///                            390609x less space
 }
 ```
 
@@ -34,7 +34,7 @@ Many methods are absent yet, but most common are implemented.
  - `max`
  - `mean`
  - `stdDev`
- - `valueAtPercentile`
+ - `percentile`
 
 ## Iterating buckets
 
