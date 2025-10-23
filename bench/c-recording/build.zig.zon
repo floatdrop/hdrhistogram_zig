@@ -33,8 +33,8 @@
     // internet connectivity.
     .dependencies = .{
         .hdrhistogram_c = .{
-            .url = "https://github.com/floatdrop/hdrhistogram_c_zig/archive/f3f6c43c6eb7373e0b279c6076c842e2aade09da.tar.gz",
-            .hash = "hdrhistogram-0.11.9-EnLqibcMAACzLamltK1KCytCFm_VqgSaFByS7p64dGka",
+            .url = "https://github.com/floatdrop/hdrhistogram_c_zig/archive/880461ba3b2a26a0c614a31629117008e2248a5a.tar.gz",
+            .hash = "hdrhistogram-0.11.9-EnLqidYMAAChyssHXCqeemCortY5vGTM4GRtrbQ-UGBR",
         },
     },
     .paths = .{
