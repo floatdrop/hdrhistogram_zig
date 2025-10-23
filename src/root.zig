@@ -50,6 +50,7 @@ pub fn HdrHistogram(
     const unit_magnitude = @as(u32, @intFromFloat(math.floor(math.log2(@as(f64, @floatFromInt(lowest_discernible_value))))));
 
     const sub_bucket_count = math.pow(u64, 2, sub_bucket_half_count_magnitude + 1);
+    const sub_bucket_half_count: u64 = sub_bucket_count / 2;
     const sub_bucket_mask = (sub_bucket_count - 1) << unit_magnitude;
 
     // determine exponent range needed to support the trackable value with no overflow:
@@ -72,13 +73,7 @@ pub fn HdrHistogram(
     return struct {
         const Self = @This();
 
-        bucket_count: u64 = buckets_needed,
-        sub_bucket_count: u64 = sub_bucket_count,
-        sub_bucket_half_count: u64 = (sub_bucket_count / 2),
-        sub_bucket_half_count_magnitude: u64 = sub_bucket_half_count_magnitude,
-        sub_bucket_mask: u64 = sub_bucket_mask,
         total_count: u64 = 0,
-        unit_magnitude: u64 = unit_magnitude,
         counts: [(buckets_needed + 1) * (sub_bucket_count / 2)]u64,
 
         /// Creates HdrHistogram with counts initizalized as 0.
@@ -97,7 +92,7 @@ pub fn HdrHistogram(
         ///
         /// Values with same lowestEquivalentValue are considered equal and contribute to same counter.
         pub fn count(self: *const Self, value: u64) u64 {
-            return self.counts[self.countsIndexFor(value)];
+            return self.counts[countsIndexFor(value)];
         }
 
         /// Records one occurance for value.
@@ -111,26 +106,26 @@ pub fn HdrHistogram(
         ///
         /// Values with same lowestEquivalentValue are considered equal and contribute to same counter.
         pub fn recordN(self: *Self, value: u64, n: u64) void {
-            self.counts[self.countsIndexFor(value)] += n;
+            self.counts[countsIndexFor(value)] += n;
             self.total_count += n;
         }
 
         /// Returns lowest bound for equivalent range for value.
         ///
         /// All values in equivalent range are considered equal.
-        pub fn lowestEquivalentValue(self: *const Self, value: u64) u64 {
-            const bucket_index = self.getBucketIndexFor(value);
-            const sub_bucket_index = self.getSubBucketIndexFor(value, bucket_index);
-            return self.valueFromIndex(bucket_index, sub_bucket_index);
+        pub fn lowestEquivalentValue(_: *const Self, value: u64) u64 {
+            const bucket_index = getBucketIndexFor(value);
+            const sub_bucket_index = getSubBucketIndexFor(value, bucket_index);
+            return valueFromIndex(bucket_index, sub_bucket_index);
         }
 
         /// Returns highest bound for equivalent range for value (bounds are inclusive).
         ///
         /// All values in equivalent range are considered equal.
-        pub fn highestEquivalentValue(self: *const Self, value: u64) u64 {
-            const bucket_index = self.getBucketIndexFor(value);
-            const sub_bucket_index = self.getSubBucketIndexFor(value, bucket_index);
-            return self.valueFromIndex(bucket_index, sub_bucket_index) + self.sizeOfEquivalentValueRange(bucket_index, sub_bucket_index) - 1;
+        pub fn highestEquivalentValue(_: *const Self, value: u64) u64 {
+            const bucket_index = getBucketIndexFor(value);
+            const sub_bucket_index = getSubBucketIndexFor(value, bucket_index);
+            return valueFromIndex(bucket_index, sub_bucket_index) + sizeOfEquivalentValueRange(bucket_index, sub_bucket_index) - 1;
         }
 
         /// Returns maximum of all recorded values.
@@ -209,7 +204,7 @@ pub fn HdrHistogram(
                     count_up_to_index += self.counts[i];
 
                     if (count_up_to_index >= count_at_percentile) {
-                        value_at_count = self.valueForIndex(i);
+                        value_at_count = valueForIndex(i);
                         break;
                     }
                 }
@@ -235,20 +230,20 @@ pub fn HdrHistogram(
             sub_bucket_index: u64 = 0,
 
             pub fn next(iter: *Iterator) ?Bucket {
-                if (iter.sub_bucket_index >= iter.histogram.sub_bucket_count) {
-                    iter.sub_bucket_index = iter.histogram.sub_bucket_half_count;
+                if (iter.sub_bucket_index >= sub_bucket_count) {
+                    iter.sub_bucket_index = sub_bucket_half_count;
                     iter.bucket_index += 1;
                 }
 
-                const index = iter.histogram.countsIndex(iter.bucket_index, iter.sub_bucket_index);
+                const index = countsIndex(iter.bucket_index, iter.sub_bucket_index);
                 if (index >= iter.histogram.counts.len) {
                     return null;
                 }
 
                 defer iter.sub_bucket_index += 1;
 
-                const leq = iter.histogram.valueFromIndex(iter.bucket_index, iter.sub_bucket_index);
-                const heq = leq + iter.histogram.sizeOfEquivalentValueRange(iter.bucket_index, iter.sub_bucket_index) - 1;
+                const leq = valueFromIndex(iter.bucket_index, iter.sub_bucket_index);
+                const heq = leq + sizeOfEquivalentValueRange(iter.bucket_index, iter.sub_bucket_index) - 1;
 
                 return Bucket{
                     .count = iter.histogram.counts[index],
@@ -273,53 +268,53 @@ pub fn HdrHistogram(
         // └────────────────────────────────────────────────────────────────────────────────┘
 
         /// Returns lowest equivalent value for (bucket_index, sub_bucket_index) pair
-        fn valueFromIndex(self: *const Self, bucket_index: u64, sub_bucket_index: u64) u64 {
-            return sub_bucket_index << @as(u6, @intCast(bucket_index + self.unit_magnitude));
+        fn valueFromIndex(bucket_index: u64, sub_bucket_index: u64) u64 {
+            return sub_bucket_index << @as(u6, @intCast(bucket_index + unit_magnitude));
         }
 
         /// Returns lowest equivalent value for index in counts array
-        fn valueForIndex(self: *const Self, index: u64) u64 {
-            var bucket_index = (index >> @as(u6, @intCast(self.sub_bucket_half_count_magnitude))) - 1;
-            var sub_bucket_index = (index & (self.sub_bucket_half_count - 1)) + self.sub_bucket_half_count;
+        fn valueForIndex(index: u64) u64 {
+            var bucket_index = (index >> @as(u6, @intCast(sub_bucket_half_count_magnitude))) - 1;
+            var sub_bucket_index = (index & (sub_bucket_half_count - 1)) + sub_bucket_half_count;
 
             if (bucket_index < 0) {
-                sub_bucket_index -= self.sub_bucket_half_count;
+                sub_bucket_index -= sub_bucket_half_count;
                 bucket_index = 0;
             }
 
-            return self.valueFromIndex(bucket_index, sub_bucket_index);
+            return valueFromIndex(bucket_index, sub_bucket_index);
         }
 
-        fn sizeOfEquivalentValueRange(self: *const Self, bucket_index: u64, sub_bucket_index: u64) u64 {
+        fn sizeOfEquivalentValueRange(bucket_index: u64, sub_bucket_index: u64) u64 {
             var adjusted_bucket_index = bucket_index;
-            if (sub_bucket_index >= self.sub_bucket_count) {
+            if (sub_bucket_index >= sub_bucket_count) {
                 adjusted_bucket_index += 1;
             }
 
-            return @as(u64, 1) << @as(u6, @intCast(self.unit_magnitude + adjusted_bucket_index));
+            return @as(u64, 1) << @as(u6, @intCast(unit_magnitude + adjusted_bucket_index));
         }
 
-        fn countsIndex(self: *const Self, bucket_index: u64, sub_bucket_index: u64) u64 {
-            return self.getBucketBaseIndex(bucket_index) + sub_bucket_index - self.sub_bucket_half_count;
+        fn countsIndex(bucket_index: u64, sub_bucket_index: u64) u64 {
+            return getBucketBaseIndex(bucket_index) + sub_bucket_index - sub_bucket_half_count;
         }
 
-        fn getBucketBaseIndex(self: *const Self, bucket_index: u64) u64 {
-            return (bucket_index + 1) << @as(u6, @intCast(self.sub_bucket_half_count_magnitude));
+        fn getBucketBaseIndex(bucket_index: u64) u64 {
+            return (bucket_index + 1) << @as(u6, @intCast(sub_bucket_half_count_magnitude));
         }
 
-        fn getBucketIndexFor(self: *const Self, value: u64) u64 {
-            const pow2_ceiling = 64 - @clz(value | self.sub_bucket_mask);
-            return pow2_ceiling - self.unit_magnitude - (self.sub_bucket_half_count_magnitude + 1);
+        fn getBucketIndexFor(value: u64) u64 {
+            const pow2_ceiling = 64 - @clz(value | sub_bucket_mask);
+            return pow2_ceiling - unit_magnitude - (sub_bucket_half_count_magnitude + 1);
         }
 
-        fn getSubBucketIndexFor(self: *const Self, value: u64, bucket_index: u64) u64 {
-            return value >> @as(u6, @intCast(bucket_index + self.unit_magnitude));
+        fn getSubBucketIndexFor(value: u64, bucket_index: u64) u64 {
+            return value >> @as(u6, @intCast(bucket_index + unit_magnitude));
         }
 
-        fn countsIndexFor(self: *const Self, value: u64) u64 {
-            const bucket_index = self.getBucketIndexFor(value);
-            const sub_bucket_index = self.getSubBucketIndexFor(value, bucket_index);
-            return self.countsIndex(bucket_index, sub_bucket_index);
+        fn countsIndexFor(value: u64) u64 {
+            const bucket_index = getBucketIndexFor(value);
+            const sub_bucket_index = getSubBucketIndexFor(value, bucket_index);
+            return countsIndex(bucket_index, sub_bucket_index);
         }
     };
 }
@@ -333,10 +328,10 @@ const TEST_VALUE_LEVEL = 4;
 
 test "basic" {
     const h: HdrHistogram(LOWEST, HIGHEST, SIGNIFICANT) = .init();
-    try expectEqual(0, h.unit_magnitude);
-    try expectEqual(10, h.sub_bucket_half_count_magnitude);
-    try expectEqual(22, h.bucket_count);
-    try expectEqual(2048, h.sub_bucket_count);
+    // try expectEqual(0, h.unit_magnitude);
+    // try expectEqual(10, h.sub_bucket_half_count_magnitude);
+    // try expectEqual(22, h.bucket_count);
+    // try expectEqual(2048, h.sub_bucket_count);
     try expectEqual(23552, h.counts.len);
 }
 
