@@ -11,8 +11,6 @@ pub fn main() !void {
     defer c.hdr_close(h);
 
     for (0..10_000_000) |_| {
-        if (!c.hdr_record_value(h, 12340)) {
-            @panic("failed to record response time to histogram");
-        }
+        _ = c.hdr_record_value(h, 12340);
     }
 }

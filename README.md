@@ -76,4 +76,4 @@ while (iter.next()) |bucket| {
 | `./c-recording/zig-out/bin/c_recording` | 24.5 ± 0.3 | 23.7 | 26.0 | 26.38 ± 3.50 |
 | `./zig-recording/zig-out/bin/zig_recording` | 0.9 ± 0.1 | 0.7 | 1.5 | 1.00 |
 
-Run `make bench` from `bench` directory to start benchmarks ([hyperfine](https://github.com/sharkdp/hyperfine) is required).
+Run `make bench` to start benchmarks ([hyperfine](https://github.com/sharkdp/hyperfine) is required).
