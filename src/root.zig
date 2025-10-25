@@ -73,7 +73,6 @@ pub fn HdrHistogram(
     return struct {
         const Self = @This();
 
-        total_count: u64 = 0,
         counts: [(buckets_needed + 1) * (sub_bucket_count / 2)]u64,
 
         /// Creates HdrHistogram with counts initizalized as 0.
@@ -90,6 +89,15 @@ pub fn HdrHistogram(
             return self.counts[countsIndexFor(value)];
         }
 
+        /// Returns total count of recorded values.
+        pub fn totalCount(self: *const Self) usize {
+            var total: usize = 0;
+            for (self.counts) |c| {
+                total += c;
+            }
+            return total;
+        }
+
         /// Records one occurance for value.
         ///
         /// Values with same lowest_equivalent_value are considered equal and contribute to same counter.
@@ -102,7 +110,6 @@ pub fn HdrHistogram(
         /// Values with same lowest_equivalent_value are considered equal and contribute to same counter.
         pub fn recordN(self: *Self, value: u64, n: u64) void {
             self.counts[countsIndexFor(value)] += n;
-            self.total_count += n;
         }
 
         /// Returns lowest bound for equivalent range for value.
@@ -150,24 +157,26 @@ pub fn HdrHistogram(
 
         /// Returns mean of all recorded values.
         pub fn mean(self: *const Self) u64 {
-            if (self.total_count == 0) {
+            const tc = self.totalCount();
+            if (tc == 0) {
                 return 0;
             }
 
-            var total: u64 = 0.0;
+            var sum: u64 = 0.0;
             var i = self.iterator();
             while (i.next()) |bucket| {
                 if (bucket.count != 0) {
-                    total += bucket.count * bucket.median_equivalent_value();
+                    sum += bucket.count * bucket.median_equivalent_value();
                 }
             }
 
-            return total / self.total_count;
+            return sum / tc;
         }
 
         /// Returns standard deviation of all recorded values.
         pub fn stdDev(self: *const Self) u64 {
-            if (self.total_count == 0) {
+            const tc = self.totalCount();
+            if (tc == 0) {
                 return 0;
             }
 
@@ -182,54 +191,28 @@ pub fn HdrHistogram(
                 }
             }
 
-            return math.sqrt(geometric_dev_total / self.total_count);
+            return math.sqrt(geometric_dev_total / tc);
         }
 
-        /// Returns percentile value.
-        ///
-        /// That is value, which is greater than percentile% of recorded values.
-        pub fn percentile(self: *const Self, p: f64) u64 {
-            const p_ = math.clamp(p, 0.0, 100.0);
-
-            const count_at_percentile: u64 = self.total_count * @as(u64, @intFromFloat(p_ * 100000)) / (100 * 100000); // scaling p to 5 digits beyond point
-            var count_up_to_index: u64 = 0;
-            var value_at_count: u64 = 0;
-            for (0..self.counts.len) |i| {
-                if (self.counts[i] != 0) {
-                    count_up_to_index += self.counts[i];
-
-                    if (count_up_to_index >= count_at_percentile) {
-                        value_at_count = valueForIndex(i);
-                        break;
-                    }
-                }
-            }
-
-            if (p == 0.0) {
-                return self.lowestEquivalentValue(value_at_count);
-            }
-            return self.highestEquivalentValue(value_at_count);
+        pub fn percentiles(self: *const Self, comptime targets: []const f64) [targets.len]u64 {
+            var iter = self.iterator().percentile();
+            return iter.take(targets);
         }
 
         /// Returns iterator over all buckets (including empty ones).
-        ///
-        /// Iterator must outlive histogram struct.
         pub fn iterator(self: *const Self) Iterator {
-            return .{ .histogram = self, .total_count = self.total_count };
+            return .{ .histogram = self };
         }
 
         pub const Iterator = struct {
             histogram: *const Self,
 
-            /// Contains total number of values, that have been recorded to histogram
-            total_count: usize = 0,
-
             bucket_index: u64 = 0,
             sub_bucket_index: u64 = 0,
 
-            /// Wraps copy of iter and produces iterator, that reports percentiles
-            pub fn percentile(iter: Iterator) PercentileIterator {
-                return .{ .iterator = iter, .total_count = @floatFromInt(iter.total_count) };
+            /// Wraps copy of Iterator and produces iterator, that reports percentiles
+            pub fn percentile(iter: *const Iterator) PercentileIterator {
+                return .{ .iterator = iter.* };
             }
 
             pub fn next(iter: *Iterator) ?Bucket {
@@ -269,22 +252,37 @@ pub fn HdrHistogram(
         pub const PercentileIterator = struct {
             iterator: Iterator,
 
-            total_count: f64,
             cumulative_count: u64 = 0,
 
             pub fn next(self: *PercentileIterator) ?Percentile {
                 while (self.iterator.next()) |bucket| {
                     if (bucket.count != 0) {
+                        const total_count: f64 = @floatFromInt(self.iterator.histogram.totalCount());
                         self.cumulative_count += bucket.count;
 
                         return .{
                             .value = bucket.highest_equivalent_value,
                             .cumulative_count = self.cumulative_count,
-                            .percentile = @as(f64, @floatFromInt(self.cumulative_count)) / self.total_count * 100.0,
+                            .percentile = @as(f64, @floatFromInt(self.cumulative_count)) / total_count * 100.0,
                         };
                     }
                 }
                 return null;
+            }
+
+            /// Returns values at provided percentiles.
+            // TODO: This function most likely will not report correct percentiles on very small ranges or without data
+            pub fn take(iter: *PercentileIterator, comptime targets: []const f64) [targets.len]u64 {
+                var result: [targets.len]u64 = undefined;
+                for (targets, 0..) |target_percentile, i| {
+                    while (iter.next()) |p| {
+                        if (p.percentile >= target_percentile) {
+                            result[i] = p.value;
+                            break;
+                        }
+                    }
+                }
+                return result;
             }
 
             pub const Percentile = struct {
@@ -396,13 +394,9 @@ test "value at percentile" {
         h.record(i);
     }
 
-    try expectEqual(500223, h.percentile(50.0));
-    try expectEqual(750079, h.percentile(75.0));
-    try expectEqual(900095, h.percentile(90.0));
-    try expectEqual(950271, h.percentile(95.0));
-    try expectEqual(990207, h.percentile(99.0));
-    try expectEqual(999423, h.percentile(99.9));
-    try expectEqual(999935, h.percentile(99.99));
+    const percentiles = h.percentiles(&.{ 50.0, 75.0, 90.0, 95.0, 99.0, 99.9, 99.99 });
+
+    try std.testing.expectEqualSlices(u64, &.{ 500223, 750079, 900095, 950271, 990207, 999423, 999935 }, &percentiles);
 }
 
 test "mean" {
@@ -442,26 +436,5 @@ test "min" {
 }
 
 test "size" {
-    try expectEqual(204808, @sizeOf(HdrHistogram(1, 10_000_000_000, .three_digits)));
-}
-
-test "percentile" {
-    var h: HdrHistogram(LOWEST, 10000000, SIGNIFICANT) = .init();
-    for (0..1000000) |i| {
-        h.record(i);
-    }
-
-    var iter = h.iterator().percentile();
-
-    while (iter.next()) |p| {
-        std.debug.print("{d} at {d:.2}%\n", .{ p.value, p.percentile });
-    }
-
-    try expectEqual(500223, h.percentile(50.0));
-    try expectEqual(750079, h.percentile(75.0));
-    try expectEqual(900095, h.percentile(90.0));
-    try expectEqual(950271, h.percentile(95.0));
-    try expectEqual(990207, h.percentile(99.0));
-    try expectEqual(999423, h.percentile(99.9));
-    try expectEqual(999935, h.percentile(99.99));
+    try expectEqual(204800, @sizeOf(HdrHistogram(1, 10_000_000_000, .three_digits)));
 }
