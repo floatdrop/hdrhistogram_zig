@@ -95,24 +95,24 @@ while (iter.next()) |bucket| {
 ## Benchmarks
 
 ```
-Benchmark 1 (478 runs): ./bench/c-recording/zig-out/bin/c_recording
+Benchmark 1 (460 runs): ./bench/c-recording/zig-out/bin/c_recording
   measurement          mean ± σ            min … max           outliers         delta
-  wall_time          20.9ms ± 3.17ms    19.7ms … 76.0ms         10 ( 2%)        0%
-  peak_rss           1.91MB ± 55.9KB    1.76MB … 2.10MB        175 (37%)        0%
-  cpu_cycles         92.3M  ± 14.7M     90.3M  …  360M          34 ( 7%)        0%
-  instructions        510M  ± 7.73       510M  …  510M          25 ( 5%)        0%
-  cache_references   16.5K  ±  492      14.5K  … 19.2K          16 ( 3%)        0%
-  cache_misses       5.07K  ±  294      4.42K  … 6.33K          26 ( 5%)        0%
-  branch_misses      3.60K  ± 33.8      3.53K  … 3.82K          21 ( 4%)        0%
-Benchmark 2 (10000 runs): ./bench/zig-recording/zig-out/bin/zig_recording
+  wall_time          21.7ms ± 7.61ms    19.9ms …  183ms          5 ( 1%)        0%
+  peak_rss           2.05MB ± 61.4KB    1.77MB … 2.23MB        174 (38%)        0%
+  cpu_cycles         94.5M  ± 37.0M     91.8M  …  885M          28 ( 6%)        0%
+  instructions        520M  ± 8.56       520M  …  520M          10 ( 2%)        0%
+  cache_references   59.5K  ±  821K     16.9K  … 17.6M          58 (13%)        0%
+  cache_misses       5.18K  ±  279      4.70K  … 6.41K          65 (14%)        0%
+  branch_misses      3.62K  ± 30.7      3.57K  … 4.04K          11 ( 2%)        0%
+Benchmark 2 (1487 runs): ./bench/zig-recording/zig-out/bin/zig_recording
   measurement          mean ± σ            min … max           outliers         delta
-  wall_time           157us ± 26.3us     123us …  486us        234 ( 2%)        ⚡- 99.2% ±  0.3%
-  peak_rss            806KB ± 10.3KB     598KB …  807KB         44 ( 0%)        ⚡- 57.9% ±  0.1%
-  cpu_cycles         2.93K  ±  208      2.51K  … 4.86K         567 ( 6%)        ⚡-100.0% ±  0.3%
-  instructions        781   ± 0.19       781   …  783          374 ( 4%)        ⚡-100.0% ±  0.0%
-  cache_references    220   ± 24.2       143   …  349          146 ( 1%)        ⚡- 98.7% ±  0.1%
-  cache_misses       48.6   ± 19.7         3   …  127           34 ( 0%)        ⚡- 99.0% ±  0.1%
-  branch_misses      28.6   ± 7.39        14   …   57          215 ( 2%)        ⚡- 99.2% ±  0.0%
+  wall_time          6.69ms ±  460us    5.87ms … 9.33ms         63 ( 4%)        ⚡- 69.2% ±  1.8%
+  peak_rss            815KB ± 8.06KB     659KB …  815KB          4 ( 0%)        ⚡- 60.2% ±  0.2%
+  cpu_cycles         26.6M  ±  127K     26.5M  … 27.6M         128 ( 9%)        ⚡- 71.9% ±  2.0%
+  instructions        114M  ± 1.65       114M  …  114M          18 ( 1%)        ⚡- 78.1% ±  0.0%
+  cache_references   6.13K  ±  585      5.33K  … 19.0K          41 ( 3%)        ⚡- 89.7% ± 70.2%
+  cache_misses        156   ±  104        50   … 1.85K          87 ( 6%)        ⚡- 97.0% ±  0.3%
+  branch_misses       122   ± 6.67        83   …  146          104 ( 7%)        ⚡- 96.6% ±  0.0%
 ```
 
 Run `make bench-poop` or `make bench-hyperfine` to start benchmarks.
