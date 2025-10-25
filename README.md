@@ -36,7 +36,7 @@ Many methods are absent yet, but most common are implemented.
 - `max`
 - `mean`
 - `stdDev`
-- `percentile`
+- `percentiles`
 
 ## Iterating buckets
 
