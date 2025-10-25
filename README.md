@@ -17,7 +17,9 @@ const HdrHistogram = @import("hdrhistogram").HdrHistogram;
 
 pub fn main() void {
     std.debug.print("Size of plain array  : {d:12} bytes\n", .{@sizeOf([10_000_000_000]u64)});
-    std.debug.print("Size of HdrHistogram : {d:12} bytes\n", .{@sizeOf(HdrHistogram(1, 10_000_000_000, .three_digits))});
+    std.debug.print("Size of HdrHistogram : {d:12} bytes\n", .
+      {@sizeOf(HdrHistogram(1, 10_000_000_000, .three_digits))
+    });
 
     /// Size of plain array  : 80000000000 bytes
     /// Size of HdrHistogram :      204808 bytes
@@ -29,12 +31,12 @@ Many methods are absent yet, but most common are implemented.
 
 ## Statistics
 
- - `total_count`
- - `min`
- - `max`
- - `mean`
- - `stdDev`
- - `percentile`
+- `total_count`
+- `min`
+- `max`
+- `mean`
+- `stdDev`
+- `percentile`
 
 ## Iterating buckets
 
@@ -44,25 +46,46 @@ To iterate over all counts with their lowers and highest equivalent values:
 var iter = h.iterator();
 
 while (iter.next()) |bucket| {
-    std.debug.print("count={d} in {d}..{d} range\n", .{bucket.count, bucket.lowest_equivalent_value, bucket.highest_equivalent_value});
+  std.debug.print("count={d} in {d}..{d} range\n", .{
+    bucket.count,
+    bucket.lowest_equivalent_value,
+    bucket.highest_equivalent_value,
+  });
+}
+```
+
+You can use `PercentileIterator` wrapper to iterate over percentiles:
+
+```zig
+var iter = h.iterator().percentile();
+
+while (iter.next()) |p| {
+    std.debug.print("value={d} in {d:.2}%\n", .{p.value, p.percentile});
 }
 ```
 
 ## Merging histograms
 
-If you have histograms of same type - you can just create histogram with `.counts` set to be a sum of other histograms `.counts`.
+If you have histograms of same type - you can just create histogram with `.counts`
+set to be a sum of other histograms `.counts`.
 
 ```zig
 const other1: HdrHistogram(1, 10_000_000_000, .three_digits);
 const other2: HdrHistogram(1, 10_000_000_000, .three_digits);
-var sum: HdrHistogram(1, 10_000_000_000, .three_digits) = .{ .counts = other1.counts + other2.counts }; // Created counts from other histograms
+var sum: HdrHistogram(1, 10_000_000_000, .three_digits) = .{ 
+  .counts = other1.counts + other2.counts
+}; // Created counts from other histograms
 ```
 
-Otherwise summing can be done by iterating over buckets and recording `lowest_equivalent_value` with respective count:
+Otherwise summing can be done by iterating over buckets and recording
+`lowest_equivalent_value` with respective count:
 
 ```zig
-const other: HdrHistogram(1, 10_000_000_000, .three_digits) = .{};     // Leaves counts uninitizalized
-var h: HdrHistogram(1, 10_000_000_000, .three_digits) = .init(); // Sets .counts to 0
+ // Leaves counts uninitialized
+const other: HdrHistogram(1, 10_000_000_000, .three_digits) = .{};
+
+ // Sets .counts to 0
+var h: HdrHistogram(1, 10_000_000_000, .three_digits) = .init();
 
 var iter = other.iterator();
 while (iter.next()) |bucket| {

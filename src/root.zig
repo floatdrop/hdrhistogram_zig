@@ -215,14 +215,22 @@ pub fn HdrHistogram(
         ///
         /// Iterator must outlive histogram struct.
         pub fn iterator(self: *const Self) Iterator {
-            return .{ .histogram = self };
+            return .{ .histogram = self, .total_count = self.total_count };
         }
 
         pub const Iterator = struct {
             histogram: *const Self,
 
+            /// Contains total number of values, that have been recorded to histogram
+            total_count: usize = 0,
+
             bucket_index: u64 = 0,
             sub_bucket_index: u64 = 0,
+
+            /// Wraps copy of iter and produces iterator, that reports percentiles
+            pub fn percentile(iter: Iterator) PercentileIterator {
+                return .{ .iterator = iter, .total_count = @floatFromInt(iter.total_count) };
+            }
 
             pub fn next(iter: *Iterator) ?Bucket {
                 if (iter.sub_bucket_index >= sub_bucket_count) {
@@ -255,6 +263,34 @@ pub fn HdrHistogram(
                 pub fn median_equivalent_value(self: *const Bucket) u64 {
                     return self.lowest_equivalent_value / 2 + self.highest_equivalent_value / 2 + 1;
                 }
+            };
+        };
+
+        pub const PercentileIterator = struct {
+            iterator: Iterator,
+
+            total_count: f64,
+            cumulative_count: u64 = 0,
+
+            pub fn next(self: *PercentileIterator) ?Percentile {
+                while (self.iterator.next()) |bucket| {
+                    if (bucket.count != 0) {
+                        self.cumulative_count += bucket.count;
+
+                        return .{
+                            .value = bucket.highest_equivalent_value,
+                            .cumulative_count = self.cumulative_count,
+                            .percentile = @as(f64, @floatFromInt(self.cumulative_count)) / self.total_count * 100.0,
+                        };
+                    }
+                }
+                return null;
+            }
+
+            pub const Percentile = struct {
+                value: u64,
+                percentile: f64,
+                cumulative_count: u64,
             };
         };
 
@@ -407,4 +443,25 @@ test "min" {
 
 test "size" {
     try expectEqual(204808, @sizeOf(HdrHistogram(1, 10_000_000_000, .three_digits)));
+}
+
+test "percentile" {
+    var h: HdrHistogram(LOWEST, 10000000, SIGNIFICANT) = .init();
+    for (0..1000000) |i| {
+        h.record(i);
+    }
+
+    var iter = h.iterator().percentile();
+
+    while (iter.next()) |p| {
+        std.debug.print("{d} at {d:.2}%\n", .{ p.value, p.percentile });
+    }
+
+    try expectEqual(500223, h.percentile(50.0));
+    try expectEqual(750079, h.percentile(75.0));
+    try expectEqual(900095, h.percentile(90.0));
+    try expectEqual(950271, h.percentile(95.0));
+    try expectEqual(990207, h.percentile(99.0));
+    try expectEqual(999423, h.percentile(99.9));
+    try expectEqual(999935, h.percentile(99.99));
 }
