@@ -65,8 +65,7 @@ while (iter.next()) |p| {
 
 ## Merging histograms
 
-If you have histograms of same type - you can just create histogram with `.counts`
-set to be a sum of other histograms `.counts`.
+Use `merge` method to add data from one histogram to another.
 
 ```zig
 const other1: HdrHistogram(1, 10_000_000_000, .three_digits);
