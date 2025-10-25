@@ -74,6 +74,7 @@ pub fn HdrHistogram(
         const Self = @This();
 
         counts: [(buckets_needed + 1) * (sub_bucket_count / 2)]u64,
+        total_count: u64 = 0,
 
         /// Creates HdrHistogram with counts initizalized as 0.
         pub fn init() Self {
@@ -89,15 +90,6 @@ pub fn HdrHistogram(
             return self.counts[countsIndexFor(value)];
         }
 
-        /// Returns total count of recorded values.
-        pub fn totalCount(self: *const Self) usize {
-            var total: usize = 0;
-            for (self.counts) |c| {
-                total += c;
-            }
-            return total;
-        }
-
         /// Records one occurance for value.
         ///
         /// Values with same lowest_equivalent_value are considered equal and contribute to same counter.
@@ -110,6 +102,7 @@ pub fn HdrHistogram(
         /// Values with same lowest_equivalent_value are considered equal and contribute to same counter.
         pub fn recordN(self: *Self, value: u64, n: u64) void {
             self.counts[countsIndexFor(value)] += n;
+            self.total_count += n;
         }
 
         /// Returns lowest bound for equivalent range for value.
@@ -157,8 +150,7 @@ pub fn HdrHistogram(
 
         /// Returns mean of all recorded values.
         pub fn mean(self: *const Self) u64 {
-            const tc = self.totalCount();
-            if (tc == 0) {
+            if (self.total_count == 0) {
                 return 0;
             }
 
@@ -170,13 +162,12 @@ pub fn HdrHistogram(
                 }
             }
 
-            return sum / tc;
+            return sum / self.total_count;
         }
 
         /// Returns standard deviation of all recorded values.
         pub fn stdDev(self: *const Self) u64 {
-            const tc = self.totalCount();
-            if (tc == 0) {
+            if (self.total_count == 0) {
                 return 0;
             }
 
@@ -191,12 +182,35 @@ pub fn HdrHistogram(
                 }
             }
 
-            return math.sqrt(geometric_dev_total / tc);
+            return math.sqrt(geometric_dev_total / self.total_count);
         }
 
+        /// Returns percentile values for provided percentile targets.
+        /// targets must be sorted in ascending order and contain values from 0.0 to 100.0 range.
         pub fn percentiles(self: *const Self, comptime targets: []const f64) [targets.len]u64 {
+            std.debug.assert(std.sort.isSorted(f64, targets, {}, std.sort.asc(f64)));
+
+            var result: [targets.len]u64 = .{0} ** targets.len;
+            if (self.total_count == 0 or targets.len == 0) {
+                return result;
+            }
+
+            const tc: f64 = @floatFromInt(self.total_count);
             var iter = self.iterator().percentile();
-            return iter.take(targets);
+            var i: usize = 0;
+            var target_count = (targets[0] / 100.0) * tc;
+            while (iter.next()) |p| {
+                if (@as(f64, @floatFromInt(p.cumulative_count)) >= target_count) {
+                    result[i] = p.value;
+                    i += 1;
+                    if (i >= targets.len) {
+                        break;
+                    }
+                    target_count = (targets[i] / 100.0) * tc;
+                }
+            }
+
+            return result;
         }
 
         /// Returns iterator over all buckets (including empty ones).
@@ -212,7 +226,7 @@ pub fn HdrHistogram(
 
             /// Wraps copy of Iterator and produces iterator, that reports percentiles
             pub fn percentile(iter: *const Iterator) PercentileIterator {
-                return .{ .iterator = iter.* };
+                return .{ .iterator = iter.*, .total_count = @floatFromInt(iter.histogram.total_count) };
             }
 
             pub fn next(iter: *Iterator) ?Bucket {
@@ -252,37 +266,22 @@ pub fn HdrHistogram(
         pub const PercentileIterator = struct {
             iterator: Iterator,
 
+            total_count: f64,
             cumulative_count: u64 = 0,
 
             pub fn next(self: *PercentileIterator) ?Percentile {
                 while (self.iterator.next()) |bucket| {
                     if (bucket.count != 0) {
-                        const total_count: f64 = @floatFromInt(self.iterator.histogram.totalCount());
                         self.cumulative_count += bucket.count;
 
                         return .{
                             .value = bucket.highest_equivalent_value,
                             .cumulative_count = self.cumulative_count,
-                            .percentile = @as(f64, @floatFromInt(self.cumulative_count)) / total_count * 100.0,
+                            .percentile = @as(f64, @floatFromInt(self.cumulative_count)) / self.total_count * 100.0,
                         };
                     }
                 }
                 return null;
-            }
-
-            /// Returns values at provided percentiles.
-            // TODO: This function most likely will not report correct percentiles on very small ranges or without data
-            pub fn take(iter: *PercentileIterator, comptime targets: []const f64) [targets.len]u64 {
-                var result: [targets.len]u64 = undefined;
-                for (targets, 0..) |target_percentile, i| {
-                    while (iter.next()) |p| {
-                        if (p.percentile >= target_percentile) {
-                            result[i] = p.value;
-                            break;
-                        }
-                    }
-                }
-                return result;
             }
 
             pub const Percentile = struct {
@@ -436,5 +435,5 @@ test "min" {
 }
 
 test "size" {
-    try expectEqual(204800, @sizeOf(HdrHistogram(1, 10_000_000_000, .three_digits)));
+    try expectEqual(204808, @sizeOf(HdrHistogram(1, 10_000_000_000, .three_digits)));
 }

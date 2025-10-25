@@ -22,8 +22,7 @@ pub fn main() void {
     });
 
     /// Size of plain array  : 80000000000 bytes
-    /// Size of HdrHistogram :      204800 bytes
-    ///                            390625x less space
+    /// Size of HdrHistogram :      204808 bytes
 }
 ```
 
