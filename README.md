@@ -31,11 +31,11 @@ Many methods are absent yet, but most common are implemented.
 ## Statistics
 
 - `total_count`
-- `min`
-- `max`
-- `mean`
-- `stdDev`
-- `percentiles`
+- `min()`
+- `max()`
+- `mean()`
+- `stdDev()`
+- `percentiles(&.{...})`
 
 ## Iterating buckets
 
@@ -71,25 +71,10 @@ set to be a sum of other histograms `.counts`.
 ```zig
 const other1: HdrHistogram(1, 10_000_000_000, .three_digits);
 const other2: HdrHistogram(1, 10_000_000_000, .three_digits);
-var sum: HdrHistogram(1, 10_000_000_000, .three_digits) = .{ 
-  .counts = other1.counts + other2.counts
-}; // Created counts from other histograms
-```
+var sum: HdrHistogram(1, 10_000_000_000, .three_digits) = .init();
 
-Otherwise summing can be done by iterating over buckets and recording
-`lowest_equivalent_value` with respective count:
-
-```zig
- // Leaves counts uninitialized
-const other: HdrHistogram(1, 10_000_000_000, .three_digits) = .{};
-
- // Sets .counts to 0
-var h: HdrHistogram(1, 10_000_000_000, .three_digits) = .init();
-
-var iter = other.iterator();
-while (iter.next()) |bucket| {
-    h.recordN(iter.lowest_equivalent_value, iter.count);
-}
+sum.merge(other1);
+sum.merge(other2);
 ```
 
 ## Benchmarks

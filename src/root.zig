@@ -210,6 +210,14 @@ pub fn HdrHistogram(
             return results;
         }
 
+        /// Adds counts from other HdrHistogram and updates total_count.
+        pub fn merge(self: *Self, other: *const Self) void {
+            for (other.counts, 0..) |c, i| {
+                self.counts[i] += c;
+            }
+            self.total_count += other.total_count;
+        }
+
         /// Returns iterator over all buckets (including empty ones).
         pub fn iterator(self: *const Self) Iterator {
             return .{ .histogram = self };
@@ -443,4 +451,21 @@ test "min" {
 
 test "size" {
     try expectEqual(204808, @sizeOf(HdrHistogram(1, 10_000_000_000, .three_digits)));
+}
+
+test "merge" {
+    var h1: HdrHistogram(LOWEST, HIGHEST, SIGNIFICANT) = .init();
+    h1.record(LOWEST + 1);
+    h1.record(LOWEST + 1000);
+
+    var h2: HdrHistogram(LOWEST, HIGHEST, SIGNIFICANT) = .init();
+    h2.record(LOWEST + 1);
+    h2.record(LOWEST + 2000);
+
+    h1.merge(&h2);
+
+    try expectEqual(4, h1.total_count);
+    try expectEqual(2, h1.count(LOWEST + 1));
+    try expectEqual(1, h1.count(LOWEST + 1000));
+    try expectEqual(1, h1.count(LOWEST + 2000));
 }
