@@ -190,27 +190,24 @@ pub fn HdrHistogram(
         pub fn percentiles(self: *const Self, comptime targets: []const f64) [targets.len]u64 {
             std.debug.assert(std.sort.isSorted(f64, targets, {}, std.sort.asc(f64)));
 
-            var result: [targets.len]u64 = .{0} ** targets.len;
+            var results: [targets.len]u64 = .{0} ** targets.len;
             if (self.total_count == 0 or targets.len == 0) {
-                return result;
+                return results;
             }
 
             const tc: f64 = @floatFromInt(self.total_count);
             var iter = self.iterator().percentile();
-            var i: usize = 0;
-            var target_count = (targets[0] / 100.0) * tc;
-            while (iter.next()) |p| {
-                if (@as(f64, @floatFromInt(p.cumulative_count)) >= target_count) {
-                    result[i] = p.value;
-                    i += 1;
-                    if (i >= targets.len) {
+            var current_percentile = iter.next();
+            for (targets, 0..) |target, i| {
+                const target_count = (target / 100.0) * tc;
+                while (current_percentile) |p| : (current_percentile = iter.next()) {
+                    if (@as(f64, @floatFromInt(p.cumulative_count)) >= target_count) {
+                        results[i] = p.value;
                         break;
                     }
-                    target_count = (targets[i] / 100.0) * tc;
                 }
             }
-
-            return result;
+            return results;
         }
 
         /// Returns iterator over all buckets (including empty ones).
@@ -396,6 +393,16 @@ test "value at percentile" {
     const percentiles = h.percentiles(&.{ 50.0, 75.0, 90.0, 95.0, 99.0, 99.9, 99.99 });
 
     try std.testing.expectEqualSlices(u64, &.{ 500223, 750079, 900095, 950271, 990207, 999423, 999935 }, &percentiles);
+}
+
+test "small histogram percentiles" {
+    var h: HdrHistogram(LOWEST, 10000000, SIGNIFICANT) = .init();
+    const v = LOWEST + 1;
+    h.record(v);
+
+    const percentiles = h.percentiles(&.{ 50.0, 75.0, 90.0, 95.0, 99.0, 99.9, 99.999, 100.0 });
+    const expected: []const u64 = &.{ v, v, v, v, v, v, v, v };
+    try std.testing.expectEqualSlices(u64, expected, &percentiles);
 }
 
 test "mean" {
