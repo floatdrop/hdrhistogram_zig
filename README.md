@@ -78,6 +78,8 @@ sum.merge(other2);
 
 ## Benchmarks
 
+Inserting 10_000_000 records in a for-loop:
+
 ```
 Benchmark 1 (460 runs): ./bench/c-recording/zig-out/bin/c_recording
   measurement          mean ± σ            min … max           outliers         delta
