@@ -238,7 +238,7 @@ pub fn HdrHistogram(
             try w.writeInt(u8, @intFromEnum(significant_value_digits), .big);
 
             // From metadata size of counts is computable
-            try zigZagEncode(self.counts, w);
+            try zigZagEncode(&self.counts, w);
         }
 
         // ┌───────────────────────────────────────────────────────────────────┐
