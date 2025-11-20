@@ -235,7 +235,7 @@ pub fn HdrHistogram(
         pub fn encode(self: *const Self, w: *std.Io.Writer) !void {
             try w.writeInt(u64, lowest_discernible_value, .big);
             try w.writeInt(u64, highest_trackable_value, .big);
-            try w.writeInt(u8, significant_value_digits, .big);
+            try w.writeInt(u8, @intFromEnum(significant_value_digits), .big);
 
             // From metadata size of counts is computable
             try zigZagEncode(self.counts, w);
