@@ -232,7 +232,7 @@ pub fn HdrHistogram(
         /// encoding (but with standard Leb128 encoding of counts)
         ///
         /// This is no-compatible encoding with V2 encoding format from HdrHistogram
-        pub fn encode(self: *const Self, w: std.Io.Writer) !void {
+        pub fn encode(self: *const Self, w: *std.Io.Writer) !void {
             try w.writeInt(u64, lowest_discernible_value, .big);
             try w.writeInt(u64, highest_trackable_value, .big);
             try w.writeInt(u8, significant_value_digits, .big);
