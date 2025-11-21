@@ -111,6 +111,21 @@ pub fn HdrHistogram(
             self.total_count += n;
         }
 
+        /// Records one occurance for value with atomicRmw.
+        ///
+        /// Values with same lowest_equivalent_value are considered equal and contribute to same counter.
+        pub fn atomicRecord(self: *Self, value: u64) void {
+            self.atomicRecordN(value, 1);
+        }
+
+        /// Records N occurances for value with atomicRmw.
+        ///
+        /// Values with same lowest_equivalent_value are considered equal and contribute to same counter.
+        pub fn atomicRecordN(self: *Self, value: u64, n: u64) void {
+            _ = @atomicRmw(u64, &self.counts[countsIndexFor(value)], .Add, n, .release);
+            _ = @atomicRmw(u64, &self.total_count, .Add, n, .release);
+        }
+
         /// Returns lowest bound for equivalent range for value.
         ///
         /// All values in equivalent range are considered equal.
@@ -399,6 +414,9 @@ test "record value" {
     var h: HdrHistogram(LOWEST, HIGHEST, SIGNIFICANT) = .init();
     h.record(TEST_VALUE_LEVEL);
     try expectEqual(1, h.count(TEST_VALUE_LEVEL));
+
+    h.atomicRecord(TEST_VALUE_LEVEL);
+    try expectEqual(2, h.count(TEST_VALUE_LEVEL));
 }
 
 test "empty histogram" {
