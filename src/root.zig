@@ -54,8 +54,8 @@ pub fn HdrHistogram(
 
     const unit_magnitude = @as(u32, @intFromFloat(math.floor(math.log2(@as(f64, @floatFromInt(lowest_discernible_value))))));
 
-    const sub_bucket_count = math.pow(u64, 2, sub_bucket_half_count_magnitude + 1);
-    const sub_bucket_half_count: u64 = sub_bucket_count / 2;
+    const sub_bucket_count = math.pow(usize, 2, sub_bucket_half_count_magnitude + 1);
+    const sub_bucket_half_count: usize = sub_bucket_count / 2;
     const sub_bucket_mask = (sub_bucket_count - 1) << unit_magnitude;
 
     // determine exponent range needed to support the trackable value with no overflow:
@@ -343,12 +343,12 @@ pub fn HdrHistogram(
         // └────────────────────────────────────────────────────────────────────────────────┘
 
         /// Returns lowest equivalent value for (bucket_index, sub_bucket_index) pair
-        fn valueFromIndex(bucket_index: u64, sub_bucket_index: u64) u64 {
+        fn valueFromIndex(bucket_index: usize, sub_bucket_index: usize) u64 {
             return sub_bucket_index << @as(u6, @intCast(bucket_index + unit_magnitude));
         }
 
         /// Returns lowest equivalent value for index in counts array
-        fn valueForIndex(index: u64) u64 {
+        fn valueForIndex(index: usize) u64 {
             var bucket_index = (index >> @as(u6, @intCast(sub_bucket_half_count_magnitude))) - 1;
             var sub_bucket_index = (index & (sub_bucket_half_count - 1)) + sub_bucket_half_count;
 
@@ -369,24 +369,24 @@ pub fn HdrHistogram(
             return @as(u64, 1) << @as(u6, @intCast(unit_magnitude + adjusted_bucket_index));
         }
 
-        fn countsIndex(bucket_index: u64, sub_bucket_index: u64) u64 {
+        fn countsIndex(bucket_index: usize, sub_bucket_index: usize) usize {
             return getBucketBaseIndex(bucket_index) + sub_bucket_index - sub_bucket_half_count;
         }
 
-        fn getBucketBaseIndex(bucket_index: u64) u64 {
+        fn getBucketBaseIndex(bucket_index: usize) usize {
             return (bucket_index + 1) << @as(u6, @intCast(sub_bucket_half_count_magnitude));
         }
 
-        fn getBucketIndexFor(value: u64) u64 {
+        fn getBucketIndexFor(value: u64) usize {
             const pow2_ceiling = 64 - @clz(value | sub_bucket_mask);
             return pow2_ceiling - unit_magnitude - (sub_bucket_half_count_magnitude + 1);
         }
 
-        fn getSubBucketIndexFor(value: u64, bucket_index: u64) u64 {
+        fn getSubBucketIndexFor(value: u64, bucket_index: u64) usize {
             return value >> @as(u6, @intCast(bucket_index + unit_magnitude));
         }
 
-        fn countsIndexFor(value: u64) u64 {
+        fn countsIndexFor(value: u64) usize {
             const bucket_index = getBucketIndexFor(value);
             const sub_bucket_index = getSubBucketIndexFor(value, bucket_index);
             return countsIndex(bucket_index, sub_bucket_index);
