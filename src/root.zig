@@ -62,7 +62,7 @@ pub fn HdrHistogram(
     const smallest_untrackable_value = sub_bucket_count << unit_magnitude;
 
     comptime var buckets_needed = 1; // always have at least 1 bucket
-    comptime var s = smallest_untrackable_value;
+    comptime var s: u64 = smallest_untrackable_value;
     while (s < highest_trackable_value) {
         if (s > math.maxInt(u64) / 2) {
             // next shift will overflow, meaning that bucket could represent values up to ones greater than
@@ -79,8 +79,9 @@ pub fn HdrHistogram(
         const Self = @This();
 
         // TODO: Add counts_type in type definition to allow more compact representation of counts
-        counts: [(buckets_needed + 1) * (sub_bucket_count / 2)]u64,
-        total_count: u64 = 0,
+        // TODO: Replace u32 with u64 when @atomicRmw will support it on linux
+        counts: [(buckets_needed + 1) * (sub_bucket_count / 2)]u32,
+        total_count: u32 = 0,
 
         /// Creates HdrHistogram with counts initizalized as 0.
         pub fn init() Self {
@@ -106,7 +107,7 @@ pub fn HdrHistogram(
         /// Records N occurances for value.
         ///
         /// Values with same lowest_equivalent_value are considered equal and contribute to same counter.
-        pub fn recordN(self: *Self, value: u64, n: u64) void {
+        pub fn recordN(self: *Self, value: u64, n: u32) void {
             self.counts[countsIndexFor(value)] += n;
             self.total_count += n;
         }
@@ -121,9 +122,9 @@ pub fn HdrHistogram(
         /// Records N occurances for value with atomicRmw.
         ///
         /// Values with same lowest_equivalent_value are considered equal and contribute to same counter.
-        pub fn atomicRecordN(self: *Self, value: u64, n: u64) void {
-            _ = @atomicRmw(u64, &self.counts[countsIndexFor(value)], .Add, n, .release);
-            _ = @atomicRmw(u64, &self.total_count, .Add, n, .release);
+        pub fn atomicRecordN(self: *Self, value: u64, n: u32) void {
+            _ = @atomicRmw(u32, &self.counts[countsIndexFor(value)], .Add, n, .release);
+            _ = @atomicRmw(u32, &self.total_count, .Add, n, .release);
         }
 
         /// Returns lowest bound for equivalent range for value.
@@ -268,8 +269,8 @@ pub fn HdrHistogram(
         pub const Iterator = struct {
             histogram: *const Self,
 
-            bucket_index: u64 = 0,
-            sub_bucket_index: u64 = 0,
+            bucket_index: usize = 0,
+            sub_bucket_index: usize = 0,
 
             /// Wraps copy of Iterator and produces iterator, that reports percentiles
             pub fn percentile(iter: *const Iterator) PercentileIterator {
@@ -344,7 +345,7 @@ pub fn HdrHistogram(
 
         /// Returns lowest equivalent value for (bucket_index, sub_bucket_index) pair
         fn valueFromIndex(bucket_index: usize, sub_bucket_index: usize) u64 {
-            return sub_bucket_index << @as(u6, @intCast(bucket_index + unit_magnitude));
+            return sub_bucket_index << @as(u5, @intCast(bucket_index + unit_magnitude));
         }
 
         /// Returns lowest equivalent value for index in counts array
@@ -360,13 +361,13 @@ pub fn HdrHistogram(
             return valueFromIndex(bucket_index, sub_bucket_index);
         }
 
-        fn sizeOfEquivalentValueRange(bucket_index: u64, sub_bucket_index: u64) u64 {
+        fn sizeOfEquivalentValueRange(bucket_index: usize, sub_bucket_index: usize) u64 {
             var adjusted_bucket_index = bucket_index;
             if (sub_bucket_index >= sub_bucket_count) {
                 adjusted_bucket_index += 1;
             }
 
-            return @as(u64, 1) << @as(u6, @intCast(unit_magnitude + adjusted_bucket_index));
+            return @as(u64, 1) << @as(u5, @intCast(unit_magnitude + adjusted_bucket_index));
         }
 
         fn countsIndex(bucket_index: usize, sub_bucket_index: usize) usize {
@@ -382,8 +383,8 @@ pub fn HdrHistogram(
             return pow2_ceiling - unit_magnitude - (sub_bucket_half_count_magnitude + 1);
         }
 
-        fn getSubBucketIndexFor(value: u64, bucket_index: u64) usize {
-            return value >> @as(u6, @intCast(bucket_index + unit_magnitude));
+        fn getSubBucketIndexFor(value: u64, bucket_index: usize) usize {
+            return @intCast(value >> @as(u5, @intCast(bucket_index + unit_magnitude)));
         }
 
         fn countsIndexFor(value: u64) usize {
@@ -495,7 +496,7 @@ test "min" {
 }
 
 test "size" {
-    try expectEqual(204808, @sizeOf(HdrHistogram(1, 10_000_000_000, .three_digits)));
+    try expectEqual(102404, @sizeOf(HdrHistogram(1, 10_000_000_000, .three_digits)));
 }
 
 test "merge" {
